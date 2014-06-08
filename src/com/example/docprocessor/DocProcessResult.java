@@ -1,15 +1,21 @@
 package com.example.docprocessor;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.ParseException;
 import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.util.EntityUtils;
 
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Message;
 import android.app.Activity;
 import android.content.Intent;
 import android.database.Cursor;
@@ -30,6 +36,9 @@ public class DocProcessResult extends Activity {
 	public String remoteURL="",nickname="",SNO="",VC="",password="";
 	EditText etToken;
 	String[] districtList;
+
+	private HandlerThread mThread;
+	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -46,11 +55,11 @@ public class DocProcessResult extends Activity {
         	remoteURL=c.getString(0);
         	if((remoteURL.substring(remoteURL.length()-1)).equals("/"))
         	{
-        		remoteURL=remoteURL+"processing.php";
+        		remoteURL=remoteURL+"index.php/surgeryApp/processing_app";
         	}
         	else
         	{
-        		remoteURL=remoteURL+"/processing.php";
+        		remoteURL=remoteURL+"/index.php/surgeryApp/processing_app";
         	}
         	nickname=c.getString(1);
         	password=c.getString(2);
@@ -67,11 +76,9 @@ public class DocProcessResult extends Activity {
 				SET_AS=extras.getString("SET_AS");
 			if(!TextUtils.isEmpty(SCAN_CONTENT))
 			{
-				parserResult(SCAN_CONTENT,remoteURL);
+				parserResult(SCAN_CONTENT,remoteURL);			
 			}
-		}
-
-		
+		}		
 
 		
 		btnExit = (Button)findViewById(R.id.buttonExit);
@@ -83,7 +90,8 @@ public class DocProcessResult extends Activity {
 			}
         });
 	}
-
+	
+		
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
 		// Inflate the menu; this adds items to the action bar if it is present.
@@ -104,157 +112,188 @@ public class DocProcessResult extends Activity {
 		}
 	}
 	
-	public void parserResult(String scannedString,String RemoteURL){
-		tvToken=(TextView)findViewById(R.id.valueSerialNo);
-		SNO=scannedString.substring(0, 11);
-		tvToken.setText(SNO);
-		tvToken=(TextView)findViewById(R.id.valueDocType);
-		tvToken.setText(DocType[Integer.parseInt(scannedString.substring(4, 5))-1]);
-		tvToken=(TextView)findViewById(R.id.valueDistrict);
-		VC=scannedString.substring(15);
-		tvToken.setText(districtList[Integer.parseInt(scannedString.substring(2, 4))-1]);
-		etToken=(EditText)findViewById(R.id.editTextIDL5);
-		String url="";
-		if(SET_AS.equalsIgnoreCase("refused")||SET_AS.equalsIgnoreCase("voided"))
-		{
-			url=RemoteURL+"?SNO="+SNO+"&VC="+VC+"&STATUS="+SET_AS+"&STFPWD="+STAFF_PWD+"&NICKNAME="+nickname+"&IDL5="+etToken.getText().toString();
+	private Runnable sugeryRequest = new Runnable(){
+		@Override
+		public void run() {  
+			parserResult(SCAN_CONTENT,remoteURL);
 		}
-		else
-		{
-			url=RemoteURL+"?SNO="+SNO+"&VC="+VC+"&STATUS="+SET_AS+"&STFPWD="+password+"&NICKNAME="+nickname+"&IDL5="+etToken.getText().toString();
+	};
+	
+	public void parserResult(final String scannedString,final String RemoteURL){
+			tvToken=(TextView)findViewById(R.id.valueSerialNo);
+			SNO=scannedString.substring(0, 11);
+			tvToken.setText(SNO);
+			tvToken=(TextView)findViewById(R.id.valueDocType);
+			tvToken.setText(DocType[Integer.parseInt(scannedString.substring(4, 5))-1]);
+			tvToken=(TextView)findViewById(R.id.valueDistrict);
+			VC=scannedString.substring(15);
+			tvToken.setText(districtList[Integer.parseInt(scannedString.substring(2, 4))-1]);
+			etToken=(EditText)findViewById(R.id.editTextIDL5);
+			
+			String url="";
+			if(SET_AS.equalsIgnoreCase("refused")||SET_AS.equalsIgnoreCase("voided"))
+			{
+				url=RemoteURL+"?SNO="+SNO+"&VC="+VC+"&STATUS="+SET_AS+"&STFPWD="+STAFF_PWD+"&NICKNAME="+nickname+"&IDL5="+etToken.getText().toString();
+			}
+			else
+			{
+				url=RemoteURL+"?SNO="+SNO+"&VC="+VC+"&STATUS="+SET_AS+"&STFPWD="+password+"&NICKNAME="+nickname+"&IDL5="+etToken.getText().toString();
+			}
+			if(!url.substring(0, 7).equalsIgnoreCase("http://"))
+			{
+				url="http://"+url;
+			}
+			final String urlConnect=url;
+
+			new Thread( new Runnable() {
+                @Override
+                public void run() {
+					HttpResponse httpResponse = null;
+					try {        
+					        HttpClient client = new DefaultHttpClient();
+					        HttpGet request = new HttpGet();
+					        request.setURI(new URI(urlConnect));
+					        httpResponse = client.execute(request);
+					          
+					}catch (URISyntaxException e) {
+				        e.printStackTrace();
+				    }catch (ClientProtocolException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					} catch (IOException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					String result = "";
+	                if(httpResponse.getStatusLine().getStatusCode()==200)
+	    			{
+	    				try {
+	    					result = EntityUtils.toString(httpResponse.getEntity());
+	    					
+	    				} catch (ParseException e) {
+	    					// TODO Auto-generated catch block
+	    					e.printStackTrace();
+	    				} catch (IOException e) {
+	    					// TODO Auto-generated catch block
+	    					e.printStackTrace();
+	    				}
+	    			}
+	                Message message=Message.obtain();
+	                String msg[] = {result,scannedString,RemoteURL};
+				    message.obj= msg;  
+				    mThreadHandler.sendMessage(message);
+                }
+            }).start();
 		}
-		if(!url.substring(0, 7).equalsIgnoreCase("http://"))
-		{
-			url="http://"+url;
-		}
-    	HttpGet httpGet = new HttpGet(url);
-    	HttpResponse httpResponse=null;
-		try {
-			httpResponse = new DefaultHttpClient().execute(httpGet);
-		} catch (ClientProtocolException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		if(httpResponse.getStatusLine().getStatusCode()==200)
-		{
-			try {
-				String result = EntityUtils.toString(httpResponse.getEntity());
-				if(result.length()>0)
+	
+	private Handler mThreadHandler = new Handler(){
+		@Override  
+        public void handleMessage(Message msg) {  
+            // TODO Auto-generated method stub  
+            super.handleMessage(msg);
+            String[] myMsg=(String[])msg.obj;
+            String result = myMsg[0];
+			
+//			tvToken=(TextView)findViewById(R.id.valueDocOriStatus);
+//			tvToken.setText(result);
+			if(result.length()>0)
+			{
+				String[] final_result=result.split(";");
+				if(final_result.length>1)
 				{
-					String[] final_result=result.split(";");
-					if(final_result.length>1)
+					tvToken=(TextView)findViewById(R.id.valueDocOriStatus);
+					tvToken.setText(final_result[0]);
+					tvToken=(TextView)findViewById(R.id.valueDocStatus);
+					if(final_result[1].equalsIgnoreCase("NOCHANGE"))
+					{
+						tvToken.setText(final_result[0]);
+						tvToken=(TextView)findViewById(R.id.valueStatusUpdatetime);
+						tvToken.setText("資料未變動");
+					}
+					else
+					{
+						tvToken.setText(SET_AS);
+						tvToken=(TextView)findViewById(R.id.valueStatusUpdatetime);
+						tvToken.setText(final_result[2]);
+					}
+					SNO=VC="";
+					etToken.setText("");
+					etToken.clearFocus();
+					
+					tvToken=(TextView)findViewById(R.id.valueIDL5);
+					tvToken.setText(R.string.no_idl5);
+					tvToken=(TextView)findViewById(R.id.valueNextStep);
+					tvToken.setText(R.string.nextdoc);
+					
+					btnContinue = (Button)findViewById(R.id.buttonContinue);
+					btnContinue.setOnClickListener(null);
+					btnContinue.setOnClickListener(new Button.OnClickListener(){
+						@Override
+						public void onClick(View v) {
+							// TODO Auto-generated method stub
+							Intent intent = new Intent("com.google.zxing.client.android.SCAN");	//開啟條碼掃描器
+							intent.putExtra("SCAN_MODE", "QR_CODE_MODE");	//設定QR Code參數
+							startActivityForResult(intent, 1);	//要求回傳1				
+						}
+			        });
+				}
+				else
+				{
+					if(final_result[0].equals("IDL5"))
 					{
 						tvToken=(TextView)findViewById(R.id.valueDocOriStatus);
-						tvToken.setText(final_result[0]);
+						tvToken.setText(R.string.add_idl5);
 						tvToken=(TextView)findViewById(R.id.valueDocStatus);
-						if(final_result[1].equalsIgnoreCase("NOCHANGE"))
-						{
-							tvToken.setText(final_result[0]);
-							tvToken=(TextView)findViewById(R.id.valueStatusUpdatetime);
-							tvToken.setText("資料未變動");
-						}
-						else
-						{
-							tvToken.setText(SET_AS);
-							tvToken=(TextView)findViewById(R.id.valueStatusUpdatetime);
-							tvToken.setText(final_result[2]);
-						}
-						SNO=VC="";
-						etToken.setText("");
-						etToken.clearFocus();
-						
+						tvToken.setText(R.string.add_idl5);
+						tvToken=(TextView)findViewById(R.id.valueStatusUpdatetime);
+						tvToken.setText(R.string.add_idl5);
 						tvToken=(TextView)findViewById(R.id.valueIDL5);
-						tvToken.setText(R.string.no_idl5);
+						tvToken.setText(R.string.add_idl5);
 						tvToken=(TextView)findViewById(R.id.valueNextStep);
-						tvToken.setText(R.string.nextdoc);
+						tvToken.setText(R.string.idl5first);
 						
+						
+						final String innerScannedString=myMsg[1];
+						final String innerRemoteURL=myMsg[2];
 						btnContinue = (Button)findViewById(R.id.buttonContinue);
 						btnContinue.setOnClickListener(null);
 						btnContinue.setOnClickListener(new Button.OnClickListener(){
 							@Override
 							public void onClick(View v) {
 								// TODO Auto-generated method stub
-								Intent intent = new Intent("com.google.zxing.client.android.SCAN");	//開啟條碼掃描器
-								intent.putExtra("SCAN_MODE", "QR_CODE_MODE");	//設定QR Code參數
-								startActivityForResult(intent, 1);	//要求回傳1				
+								parserResult(innerScannedString,innerRemoteURL);
 							}
-				        });
+				        });						
+						etToken.requestFocus();
 					}
-					else
+					else if(final_result[0].equals("STFPWD"))
 					{
-						if(final_result[0].equals("IDL5"))
-						{
-							tvToken=(TextView)findViewById(R.id.valueDocOriStatus);
-							tvToken.setText(R.string.add_idl5);
-							tvToken=(TextView)findViewById(R.id.valueDocStatus);
-							tvToken.setText(R.string.add_idl5);
-							tvToken=(TextView)findViewById(R.id.valueStatusUpdatetime);
-							tvToken.setText(R.string.add_idl5);
-							tvToken=(TextView)findViewById(R.id.valueIDL5);
-							tvToken.setText(R.string.add_idl5);
-							tvToken=(TextView)findViewById(R.id.valueNextStep);
-							tvToken.setText(R.string.idl5first);
-							
-							
-							final String innerScannedString=scannedString;
-							final String innerRemoteURL=RemoteURL;
-							btnContinue = (Button)findViewById(R.id.buttonContinue);
-							btnContinue.setOnClickListener(null);
-							btnContinue.setOnClickListener(new Button.OnClickListener(){
-								@Override
-								public void onClick(View v) {
-									// TODO Auto-generated method stub
-									parserResult(innerScannedString,innerRemoteURL);
-								}
-					        });						
-							etToken.requestFocus();
-						}
-						else if(final_result[0].equals("STFPWD"))
-						{
-							tvToken=(TextView)findViewById(R.id.valueDocOriStatus);
-							tvToken.setText(R.string.back_for_stfpwd);
-							tvToken=(TextView)findViewById(R.id.valueDocStatus);
-							tvToken.setText(R.string.back_for_stfpwd);
-							tvToken=(TextView)findViewById(R.id.valueStatusUpdatetime);
-							tvToken.setText(R.string.back_for_stfpwd);
-							tvToken=(TextView)findViewById(R.id.valueIDL5);
-							tvToken.setText(R.string.back_for_stfpwd);
-							tvToken=(TextView)findViewById(R.id.valueNextStep);
-							tvToken.setText(R.string.back_for_stfpwd);
-						}
-						else if(final_result[0].equals("NA"))
-						{
-							tvToken=(TextView)findViewById(R.id.valueDocOriStatus);
-							tvToken.setText(R.string.no_user);
-							tvToken=(TextView)findViewById(R.id.valueDocStatus);
-							tvToken.setText(R.string.no_user);
-							tvToken=(TextView)findViewById(R.id.valueStatusUpdatetime);
-							tvToken.setText(R.string.no_user);
-							tvToken=(TextView)findViewById(R.id.valueIDL5);
-							tvToken.setText(R.string.no_idl5);
-							tvToken=(TextView)findViewById(R.id.valueNextStep);
-							tvToken.setText(R.string.updateuser);
-						}
+						tvToken=(TextView)findViewById(R.id.valueDocOriStatus);
+						tvToken.setText(R.string.back_for_stfpwd);
+						tvToken=(TextView)findViewById(R.id.valueDocStatus);
+						tvToken.setText(R.string.back_for_stfpwd);
+						tvToken=(TextView)findViewById(R.id.valueStatusUpdatetime);
+						tvToken.setText(R.string.back_for_stfpwd);
+						tvToken=(TextView)findViewById(R.id.valueIDL5);
+						tvToken.setText(R.string.back_for_stfpwd);
+						tvToken=(TextView)findViewById(R.id.valueNextStep);
+						tvToken.setText(R.string.back_for_stfpwd);
+					}
+					else if(final_result[0].equals("NA"))
+					{
+						tvToken=(TextView)findViewById(R.id.valueDocOriStatus);
+						tvToken.setText(R.string.no_user);
+						tvToken=(TextView)findViewById(R.id.valueDocStatus);
+						tvToken.setText(R.string.no_user);
+						tvToken=(TextView)findViewById(R.id.valueStatusUpdatetime);
+						tvToken.setText(R.string.no_user);
+						tvToken=(TextView)findViewById(R.id.valueIDL5);
+						tvToken.setText(R.string.no_idl5);
+						tvToken=(TextView)findViewById(R.id.valueNextStep);
+						tvToken.setText(R.string.updateuser);
 					}
 				}
-			} catch (ParseException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
 			}
 		}
-
-		
-		
-		
-//		tvToken=(TextView)findViewById(R.id.valueDocOriStatus);
-//		tvToken.setText(remoteURL);
-	}
-	
-
+	};
 }

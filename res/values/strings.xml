@@ -2,8 +2,7 @@
 <resources>
 
     <string name="app_name">罷免文件處理器</string>
-    <string name="action_settings">設定</string>
-
+    <string name="action_settings">設定</string> 
     <string name="basic_setting">基本設定</string>
     <string name="set_basic_setting">進行基本設定</string>
     	<string name="user_nickname">工作人員代號</string>
