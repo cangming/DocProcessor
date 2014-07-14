@@ -4,12 +4,21 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.HttpsURLConnection;
+
 import org.apache.http.HttpResponse;
 import org.apache.http.ParseException;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.conn.scheme.Scheme;
+import org.apache.http.conn.scheme.SchemeRegistry;
+import org.apache.http.conn.ssl.SSLSocketFactory;
+import org.apache.http.conn.ssl.X509HostnameVerifier;
 import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.impl.conn.SingleClientConnManager;
 import org.apache.http.util.EntityUtils;
 
 import android.os.Bundle;
@@ -55,11 +64,11 @@ public class DocProcessResult extends Activity {
         	remoteURL=c.getString(0);
         	if((remoteURL.substring(remoteURL.length()-1)).equals("/"))
         	{
-        		remoteURL=remoteURL+"index.php/surgeryApp/processing_app";
+        		remoteURL=remoteURL+"/Appendectomy/index.php/surgeryApp/processing_app";
         	}
         	else
         	{
-        		remoteURL=remoteURL+"/index.php/surgeryApp/processing_app";
+        		remoteURL=remoteURL+"/Appendectomy/index.php/surgeryApp/processing_app";
         	}
         	nickname=c.getString(1);
         	password=c.getString(2);
@@ -139,9 +148,9 @@ public class DocProcessResult extends Activity {
 			{
 				url=RemoteURL+"?SNO="+SNO+"&VC="+VC+"&STATUS="+SET_AS+"&STFPWD="+password+"&NICKNAME="+nickname+"&IDL5="+etToken.getText().toString();
 			}
-			if(!url.substring(0, 7).equalsIgnoreCase("http://"))
+			if(!url.substring(0, 8).equalsIgnoreCase("https://"))
 			{
-				url="http://"+url;
+				url="https://"+url;
 			}
 			final String urlConnect=url;
 
@@ -149,15 +158,33 @@ public class DocProcessResult extends Activity {
                 @Override
                 public void run() {
 					HttpResponse httpResponse = null;
-					try {        
-					        HttpClient client = new DefaultHttpClient();
-					        HttpGet request = new HttpGet();
-					        request.setURI(new URI(urlConnect));
-					        httpResponse = client.execute(request);
-					          
-					}catch (URISyntaxException e) {
+					try {
+						HostnameVerifier hostnameVerifier = org.apache.http.conn.ssl.SSLSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER;
+
+						DefaultHttpClient client = new DefaultHttpClient();
+
+						SchemeRegistry registry = new SchemeRegistry();
+						SSLSocketFactory socketFactory = SSLSocketFactory.getSocketFactory();
+						socketFactory.setHostnameVerifier((X509HostnameVerifier) hostnameVerifier);
+						registry.register(new Scheme("https", socketFactory, 443));
+						SingleClientConnManager mgr = new SingleClientConnManager(client.getParams(), registry);
+						DefaultHttpClient httpClient = new DefaultHttpClient(mgr, client.getParams());
+
+						// Set verifier     
+						HttpsURLConnection.setDefaultHostnameVerifier(hostnameVerifier);
+
+						// Example send http request
+						HttpPost httpPost = new HttpPost(urlConnect);
+						httpResponse = httpClient.execute(httpPost);
+						
+					        //HttpClient client = new DefaultHttpClient();
+//					        HttpGet request = new HttpGet();
+//					        request.setURI(new URI(urlConnect));
+//					        httpResponse = httpClient.execute(request);
+//					          
+					}/*catch (URISyntaxException e) {
 				        e.printStackTrace();
-				    }catch (ClientProtocolException e) {
+				    }*/catch (ClientProtocolException e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
 					} catch (IOException e) {
